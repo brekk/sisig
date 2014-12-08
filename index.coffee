@@ -75,10 +75,13 @@ c = new Crawler
             process.stdout.clearLine()
             process.stdout.cursorTo(0)
             process.stdout.write "  \n"
+        unless options.terse
+            console.log ""
         sections = $('#find-us').find 'section'
         d = new Date()
         date = d.getFullYear() + '-' + forceZeroes (d.getMonth() + 1) + '-' + forceZeroes d.getDate()
         rows = $("section[data-wcal-date=#{date}]").find('.map-row')
+        first = false
         rows.each ()->
             active = $ @
             title = active.find('h5').eq(0).text()
@@ -89,7 +92,10 @@ c = new Crawler
                 location = chalk.yellow location
                 activeTime = chalk.green activeTime
             unless options.terse
-                console.log "Senor Sisig will be available at \"#{title}\" near #{location} from #{activeTime}."
+                start = "Senor Sisig will be available at"
+                if first
+                    start = "                                "
+                console.log "#{start} \"#{title}\" near #{location} from #{activeTime}."
             else
                 if options.json
                     time = activeTime.split ' to '
@@ -103,6 +109,7 @@ c = new Crawler
                     }
                 else
                     console.log "#{title} | #{location} | #{activeTime}"
+            first = true
             return
         process.exit()
         return
