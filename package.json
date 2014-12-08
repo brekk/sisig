@@ -1,0 +1,25 @@
+{
+  "name": "senorsisig",
+  "version": "0.0.1",
+  "description": "Where is Senor Sisig today?",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "senor",
+    "sisig",
+    "burrito",
+    "delicious",
+    "food",
+    "truck"
+  ],
+  "author": "Brekk Bockrath",
+  "license": "MIT",
+  "dependencies": {
+    "chalk": "^0.5.1",
+    "crawler": "^0.4.1",
+    "lodash": "^2.4.1",
+    "minimist": "^1.1.0"
+  }
+}
