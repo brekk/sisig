@@ -48,6 +48,18 @@ unless options.shutup
         process.stdout.write highlight "Loading the burrito data... "
     , 100
 
+forceZeroes = (n)->
+    if _.isNumber(n) and n < 10
+        return '0' + n
+    return '' + n
+
+timeOutKill = ()->
+    fail = "Unable to ascertain where the burritos at."
+    if options.colors
+        fail = chalk.red fail
+    console.log fail
+    process.exit()
+
 c = new Crawler
     maxConnections: 1
     jQuery: {
@@ -57,46 +69,42 @@ c = new Crawler
         }
     }
     callback: (e, res, $)->
+        setTimeout timeOutKill, 10000
         if annoucement?
             clearInterval announcement
             process.stdout.clearLine()
             process.stdout.cursorTo(0)
             process.stdout.write "  \n"
-        specials = $ '.todays-special'
-        specials.each ()->
-            if $(@).children().length > 0
-                active = $(@).closest('.map-row').eq 0
-                if active.length > 0
-                    title = active.find('h5').eq(0).text()
-                    location = active.find('.map-trigger').text().split('. ,').join(',')
-                    activeTime = active.find('.time').text().trim()
-                    if options.colors
-                        title = chalk.red title
-                        location = chalk.yellow location
-                        activeTime = chalk.cyan activeTime
-                    unless options.terse
-                        console.log "Senor Sisig will be available at \"#{title}\" near #{location} from #{activeTime}."
-                    else
-                        if options.json
-                            time = activeTime.split ' to '
-                            process.stdout.write JSON.stringify {
-                                title: title
-                                location: location
-                                time: {
-                                    start: time[0]
-                                    end: time[1]
-                                }
-                            }
-                        else
-                            console.log "#{title} | #{location} | #{activeTime}"
-                    process.exit()
+        sections = $('#find-us').find 'section'
+        d = new Date()
+        date = d.getFullYear() + '-' + forceZeroes (d.getMonth() + 1) + '-' + forceZeroes d.getDate()
+        rows = $("section[data-wcal-date=#{date}]").find('.map-row')
+        rows.each ()->
+            active = $ @
+            title = active.find('h5').eq(0).text()
+            location = active.find('.map-trigger').text().split('. ,').join(',')
+            activeTime = active.find('.time').text().trim()
+            if options.colors
+                title = chalk.red title
+                location = chalk.yellow location
+                activeTime = chalk.green activeTime
+            unless options.terse
+                console.log "Senor Sisig will be available at \"#{title}\" near #{location} from #{activeTime}."
+            else
+                if options.json
+                    time = activeTime.split ' to '
+                    process.stdout.write JSON.stringify {
+                        title: title
+                        location: location
+                        time: {
+                            start: time[0]
+                            end: time[1]
+                        }
+                    }
                 else
-                    fail = "Unable to ascertain where the burritos at."
-                    if colors
-                        fail = chalk.red fail
-                    console.log fail
-                    process.exit()
+                    console.log "#{title} | #{location} | #{activeTime}"
             return
+        process.exit()
         return
 
 c.queue 'http://senorsisig.com'
