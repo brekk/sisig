@@ -1,10 +1,14 @@
 {
   "name": "senorsisig",
   "version": "0.0.1",
-  "description": "Where is Senor Sisig today?",
+  "description": "Where is Senor Sisig?",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "mocha --reporter spec",
+    "build": "./node_modules/.bin/coffee --compile --output lib/ src/",
+    "preinstall": "npm run build",
+    "clean-dev": "(rm src/*js || true) && (rm src/test/*.js || true)",
+    "clean": "npm run clean-dev && (rm -Rf lib || true)"
   },
   "keywords": [
     "senor",
@@ -18,7 +22,9 @@
   "license": "MIT",
   "dependencies": {
     "chalk": "^0.5.1",
+    "cheerio": "^0.18.0",
     "crawler": "^0.4.1",
+    "js-beautify": "^1.5.4",
     "lodash": "^2.4.1",
     "minimist": "^1.1.0"
   }

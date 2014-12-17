@@ -1,2 +1,5 @@
 node_modules
-index.js
+lib
+.DS_Store
+db
+src/*.js
