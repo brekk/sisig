@@ -8,6 +8,9 @@ cheerio = require 'cheerio'
 chalk = require 'chalk'
 prettyHTML = require('js-beautify').html
 fs = require 'fs'
+moment = require 'moment'
+hasAnsi = require 'has-ansi'
+stripAnsi = require 'strip-ansi'
 
 currentFile = __filename.split('/')
 parentDirectory = currentFile.slice(0, -2).join '/'
@@ -45,7 +48,7 @@ if options.terse
     options.shutup = true
 
 formatDate = (d)->
-    return  d.getFullYear() + '-' + (d.getMonth() + 1) + '-' + d.getDate()
+    return moment(d).format 'YYYY[-]MM[-]DD'
 
 dateSplitter = (dString)->
     parts = dString.split '-'
@@ -57,14 +60,25 @@ dateSplitter = (dString)->
 
 timeValidator = (givenTime)->
     d = new Date()
+
     if givenTime is 'tomorrow'
         d.setDate(d.getDate() + 1)
+
     if givenTime.indexOf('-') isnt -1
-        {month, date, year} = dateSplitter givenTime
-        d.setDate date
-        d.setMonth month
-        d.setYear year
-    # if givenTime is 'today' or givenTime is 'now'
+
+        hyphenated = givenTime.split('-')
+        if hyphenated.length is 3
+            {month, date, year} = dateSplitter givenTime
+            d.setDate date
+            d.setMonth month
+            d.setYear year
+        else if _.contains hyphenated, 'days'
+            days = Number _.first hyphenated
+            d = new Date moment(d).add(days, 'days')
+        else if _.contains hyphenated, 'day'
+            d = new Date moment(d).add(1, 'days')
+
+    
     return d
 
 index = 0
@@ -88,10 +102,21 @@ highlight = (str)->
 announcement = null
 if !options.shutup or hasData
     announcement = setInterval ()->
-        process.stdout.clearLine()
-        process.stdout.cursorTo(0)
+        if process.stdout?.clearLine?
+            process.stdout.clearLine()
+        if process.stdout?.cursorTo?
+            process.stdout.cursorTo(0)
         process.stdout.write highlight "Loading the burrito data... "
     , 100
+
+stopAnnouncing = ()->
+    if announcement?
+        clearInterval announcement
+        if process.stdout?.clearLine?
+            process.stdout.clearLine()
+        if process.stdout?.cursorTo?
+            process.stdout.cursorTo(0)
+        process.stdout.write "  \n"
 
 forceZeroes = (n)->
     if _.isNumber(n) and n < 10
@@ -107,15 +132,8 @@ timeOutKill = ()->
 
 readyNow = ()->
     stale = 72e5
-    stale = 200000
     now = Date.now()
     diff = Math.abs now - cache['last-called']
-    # console.log """
-    # comparing right now: #{now} (#{new Date(now)}
-    #               cache: #{cache['last-called']}
-    #                diff: #{diff}
-    #              larger: #{diff > stale}
-    # """
     return diff > stale
 
 crawlback = _.once (e, res, $)->
@@ -125,11 +143,7 @@ crawlback = _.once (e, res, $)->
             console.log e.stack
         return
     setTimeout timeOutKill, 10000
-    if announcement?
-        clearInterval announcement
-        process.stdout.clearLine()
-        process.stdout.cursorTo(0)
-        process.stdout.write "  \n"
+    stopAnnouncing()
     unless options.terse
         console.log ""
     writeWhenDone = readyNow()
@@ -157,7 +171,7 @@ crawlback = _.once (e, res, $)->
             rows = section.find('.map-row')
             rows.each ()->
                 active = $ @
-                title = active.find('h5').eq(0).text()
+                title = active.find('h5').eq(0).text().trim()
                 location = active.find('.map-trigger').text().split('. ,').join(',')
                 activeTime = active.find('.time').text().trim()
                 activeTime = _(activeTime.split('\n')).map((word)->
@@ -172,29 +186,63 @@ crawlback = _.once (e, res, $)->
                         start: time[0]
                         end: time[1]
                     }
+                    open: true
                 }
                 whatDay = data.date
+                theBestPlace = "Senor Sisig"
                 if options.colors
                     whatDay = chalk.inverse whatDay
                     title = chalk.red title
                     location = chalk.yellow location
                     activeTime = chalk.green activeTime
-                unless options.terse
-                    start = "Senor Sisig will be available"
+                    place = theBestPlace.split ' '
+                    place[0] = chalk.yellow place[0]
+                    place[1] = chalk.cyan place[1]
+                    theBestPlace = chalk.bgRed place.join ' '
+
+                start = "#{theBestPlace} will be available"
+                if location.length is 0
+                    strongNot = 'not'
+                    if options.colors
+                        strongNot = chalk.red strongNot
+                    start = "#{theBestPlace} will #{strongNot} be available"
+                else 
                     if afterFirst
-                        start = "                             "
-                    if dateValid
-                        console.log "#{start} on #{whatDay} at \"#{title}\" near #{location} from #{activeTime}."
-                else
-                    unless options.json
+                        if hasAnsi start
+                            temp = stripAnsi start
+                        else
+                            temp = start
+                        start = _([0..temp.length-1]).map(()-> return ' ').value().join('')
+                if location.length isnt 0
+                    unless options.terse
                         if dateValid
-                            console.log "#{whatDay} | #{title} | #{location} | #{activeTime}"
+                            console.log "#{start} on #{whatDay} at \"#{title}\" near #{location} from #{activeTime}."
+                    else
+                        unless options.json
+                            if dateValid
+                                console.log "#{whatDay} | #{title} | #{location} | #{activeTime}"
+                else
+                    unless options.terse
+                        console.log "#{start} on #{whatDay}."
+                    else
+                        unless options.json
+                            closed = 'CLOSED'
+                            if options.colors
+                                closed = chalk.red closed
+                            console.log "#{whatDay} | #{closed}"
+                    data.open = false
+                    delete data.time
+                    delete data.location
+
                 output.push data
                 if dateValid
                     afterFirst = true
                 return
-            if options.json
-                process.stdout.write JSON.stringify output
+        if output?
+            # restructure the data to be easily parsed
+            output = _(output).groupBy('date').value()
+        if options.json
+            process.stdout.write JSON.stringify output
         if writeWhenDone
             cache.data = output
         if cb? and _.isFunction cb
@@ -213,6 +261,8 @@ crawlback = _.once (e, res, $)->
                 unless err
                     unless options.terse
                         console.log "Done!"
+                    else
+                        console.log ""
                     process.exit()
                     return
                 console.log "Error during attempted file writing.", e
@@ -221,8 +271,11 @@ crawlback = _.once (e, res, $)->
         else
             unless options.terse
                 console.log "Not writing output to cachefile."
+            else
+                console.log ""
             process.exit()
     return
+
 if hasData and !readyNow()
     raw = cache.raw
     $ = cheerio.load raw, {

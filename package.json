@@ -23,10 +23,13 @@
   "dependencies": {
     "chalk": "^0.5.1",
     "cheerio": "^0.18.0",
+    "coffee-script": "~1.8.0",
     "crawler": "^0.4.1",
+    "has-ansi": "^1.0.0",
     "js-beautify": "^1.5.4",
     "lodash": "^2.4.1",
     "minimist": "^1.1.0",
-    "coffee-script": "~1.8.0"
+    "moment": "^2.8.4",
+    "strip-ansi": "^2.0.0"
   }
 }
