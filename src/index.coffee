@@ -33,6 +33,9 @@ catch e
 if argv.tomorrow?
     argv.when = 'tomorrow'
 
+if argv.today?
+    argv.when = 'today'
+
 options = {
     colors: if argv.colors? then argv.colors else false
     shutup: if (argv.q? or argv.quiet? or argv.shutup?) then true else false
@@ -59,24 +62,25 @@ dateSplitter = (dString)->
     }
 
 timeValidator = (givenTime)->
+
     d = new Date()
+    if givenTime? and _.isString givenTime
+        if givenTime is 'tomorrow'
+            d.setDate(d.getDate() + 1)
 
-    if givenTime is 'tomorrow'
-        d.setDate(d.getDate() + 1)
+        if givenTime.indexOf('-') isnt -1
 
-    if givenTime.indexOf('-') isnt -1
-
-        hyphenated = givenTime.split('-')
-        if hyphenated.length is 3
-            {month, date, year} = dateSplitter givenTime
-            d.setDate date
-            d.setMonth month
-            d.setYear year
-        else if _.contains hyphenated, 'days'
-            days = Number _.first hyphenated
-            d = new Date moment(d).add(days, 'days')
-        else if _.contains hyphenated, 'day'
-            d = new Date moment(d).add(1, 'days')
+            hyphenated = givenTime.split('-')
+            if hyphenated.length is 3
+                {month, date, year} = dateSplitter givenTime
+                d.setDate date
+                d.setMonth month
+                d.setYear year
+            else if _.contains hyphenated, 'days'
+                days = Number _.first hyphenated
+                d = new Date moment(d).add(days, 'days')
+            else if _.contains hyphenated, 'day'
+                d = new Date moment(d).add(1, 'days')
 
     
     return d
@@ -222,14 +226,15 @@ crawlback = _.once (e, res, $)->
                             if dateValid
                                 console.log "#{whatDay} | #{title} | #{location} | #{activeTime}"
                 else
-                    unless options.terse
-                        console.log "#{start} on #{whatDay}."
-                    else
-                        unless options.json
-                            closed = 'CLOSED'
-                            if options.colors
-                                closed = chalk.red closed
-                            console.log "#{whatDay} | #{closed}"
+                    if dateValid
+                        unless options.terse
+                            console.log "#{start} on #{whatDay}."
+                        else
+                            unless options.json
+                                closed = 'CLOSED'
+                                if options.colors
+                                    closed = chalk.red closed
+                                console.log "#{whatDay} | #{closed}"
                     data.open = false
                     delete data.time
                     delete data.location
@@ -276,14 +281,7 @@ crawlback = _.once (e, res, $)->
             process.exit()
     return
 
-if hasData and !readyNow()
-    raw = cache.raw
-    $ = cheerio.load raw, {
-        normalizeWhitespace: false
-        decodeEntities: true
-    }
-    crawlback null, raw, $
-else
+crawl = ()->
     c = new Crawler
         maxConnections: 1
         jQuery: {
@@ -294,3 +292,16 @@ else
         }
         callback: crawlback
     c.queue 'http://senorsisig.com'
+    
+if options.force
+    crawl()
+else
+    if hasData and !readyNow()
+        raw = cache.raw
+        $ = cheerio.load raw, {
+            normalizeWhitespace: false
+            decodeEntities: true
+        }
+        crawlback null, raw, $
+    else
+        crawl()
