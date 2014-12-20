@@ -151,7 +151,7 @@ crawlback = _.once (e, res, $)->
     unless options.terse
         console.log ""
     writeWhenDone = readyNow()
-    if writeWhenDone
+    if writeWhenDone or options.force
         # because we use the crawlback method in multiple ways and we don't store the original res
         if res.body?
             cache.raw = prettyHTML res.body
@@ -243,12 +243,12 @@ crawlback = _.once (e, res, $)->
                 if dateValid
                     afterFirst = true
                 return
-        if output?
-            # restructure the data to be easily parsed
-            output = _(output).groupBy('date').value()
+        # if output?
+        #     # restructure the data to be easily parsed
+        #     output = _(output).groupBy('date').value()
         if options.json
             process.stdout.write JSON.stringify output
-        if writeWhenDone
+        if writeWhenDone or options.force
             cache.data = output
         if cb? and _.isFunction cb
             cb()
@@ -260,8 +260,8 @@ crawlback = _.once (e, res, $)->
             cache['last-called'] = Date.now()
             output = JSON.stringify cache, null, 4
             # console.log "normally we would write the output, but it's borked!"
-            # console.log "this is what we would write: \n"
-            # console.log output
+            console.log "this is what we would write: \n"
+            console.log output
             fs.writeFile cachefile, output, 'utf8', (err)->
                 unless err
                     unless options.terse
@@ -292,7 +292,7 @@ crawl = ()->
         }
         callback: crawlback
     c.queue 'http://senorsisig.com'
-    
+
 if options.force
     crawl()
 else

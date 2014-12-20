@@ -21,6 +21,7 @@
   "author": "Brekk Bockrath",
   "license": "MIT",
   "dependencies": {
+    "ampersand-model": "^4.0.3",
     "chalk": "^0.5.1",
     "cheerio": "^0.18.0",
     "coffee-script": "~1.8.0",
@@ -30,6 +31,8 @@
     "lodash": "^2.4.1",
     "minimist": "^1.1.0",
     "moment": "^2.8.4",
+    "parkplace": "0.0.8",
+    "promised-io": "^0.3.4",
     "strip-ansi": "^2.0.0"
   }
 }
