@@ -1,6 +1,6 @@
 {
   "name": "senorsisig",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "Where is Senor Sisig?",
   "main": "index.js",
   "scripts": {
