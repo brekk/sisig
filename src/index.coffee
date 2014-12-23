@@ -71,7 +71,45 @@ ___.readable 'print', (data)->
                 return "Senor Sisig will be #{closed} on #{date}."
         ).value().join '\n'
 
+index = 0
+highlight = (str)->
+    if index is 0
+        pre = ''
+        main = str.slice 0, 1
+        post = str.slice 1
+    else
+        pre = str.slice 0, index
+        main = str.slice index, index + 1
+        post = str.slice index + 1
+    if options.colors
+        main = chalk.red main
+    if index + 1 < str.length
+        index += 1
+    else
+        index = 0
+    return pre + main + post
+
+announcement = null
+if !options.shutup
+    announcement = setInterval ()->
+        if process.stdout?.clearLine?
+            process.stdout.clearLine()
+        if process.stdout?.cursorTo?
+            process.stdout.cursorTo(0)
+        process.stdout.write highlight "Loading the burrito data... "
+    , 100
+
+stopAnnouncing = ()->
+    if announcement?
+        clearInterval announcement
+        if process.stdout?.clearLine?
+            process.stdout.clearLine()
+        if process.stdout?.cursorTo?
+            process.stdout.cursorTo(0)
+        process.stdout.write "  \n"
+
 ready = ()->
+    stopAnnouncing()
     console.log sisig.print sisig.filterByDate options.when
     if sisig.cachefile.staleData or !sisig.cachefile.hasFile or options.force
         good = ()->
@@ -86,6 +124,7 @@ ready = ()->
 
 
 fail = ()->
+    stopAnnouncing()
     console.log "Fail is the best!", arguments
 
 if options.force

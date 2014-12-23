@@ -1,18 +1,4 @@
-_ = require 'lodash'
-_.mixin {
-    matchesAnyKey: (pipe, addition)->
-        if _.isObject pipe
-            pipe = _.keys pipe
-        remaining = _(arguments).toArray()
-                                .rest()
-                                .value()
-        if remaining.length is 1
-            if _(_.first(remaining)).isArray()
-                remaining = remaining[0]
-        return _.intersection(pipe, remaining).length > 0
-}, {
-    chain: false
-}
+_ = require './yolodash'
 fs = require 'fs'
 moment = require 'moment'
 pp = require 'parkplace'
