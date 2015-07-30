@@ -7,7 +7,8 @@ _ = require 'lodash'
 chalk = require 'chalk'
 hasAnsi = require 'has-ansi'
 stripAnsi = require 'strip-ansi'
-Deferred = require('promised-io/promise').Deferred
+debug = require('debug') 'sisig-cli'
+
 
 currentFile = __filename.split('/')
 parentDirectory = currentFile.slice(0, -2).join '/'
@@ -16,25 +17,54 @@ sisig.databaseLocation = parentDirectory + '/db/cachefile.json'
 
 argv = require('minimist')(process.argv.splice 2)
 
+if argv.w?
+    argv.when = argv.w
+
 if argv.tomorrow?
     argv.when = 'tomorrow'
 
 if argv.today?
     argv.when = 'today'
+if argv.nextweek?
+    argv.when = '1-week'
 
 options = {
-    colors: if argv.colors? then argv.colors else false
-    shutup: if (argv.q? or argv.quiet? or argv.shutup?) then true else false
-    terse: if argv.terse? then argv.terse else false
-    json: if argv.json? then argv.json else false
+    colors: if (argv.colors? or argv.c?) then true else false
+    shutup: if (argv.q? or argv.quiet? or argv.shutup? or argv['shut-up']?) then true else false
+    terse: if (argv.terse? or argv.t?) then true else false
+    json: if (argv.json? or argv.j?) then true else false
     force: if (argv.force? or argv.f?) then true else false
-    when: if argv.when? then argv.when else 'all'
+    help: if (argv.help? or argv.h?) then true else null
+    verbose: if (argv.verbose?) then true else null
 }
+if argv.when? or argv.w?
+    if argv.when?
+        options.when = argv.when
+    else
+        options.when = argv.w
+    if options.when? and _(options.when.split('-')).matchesAnyKey 'week|weeks'.split '|'
+            options.when = '7-days'
+if options.help?
+    console.log JSON.stringify {
+        "--tomorrow": "(equivalent to --when=1-day)"
+        "--today": "(equivalent to --when=today)"
+        "--colors, --c": "boolean"
+        "--shutup, --shut-up, --quiet, --q": "boolean"
+        "--terse, --t": "boolean"
+        "--json, --j": "boolean"
+        "--force, --f": "boolean"
+        "--when, --w": "string - 'all' (default) / 'today' / 'tomorrow' / '1-day' / '2-days' / '5-day' / '2015-07-21' / '2015-7-21'"
+        "--help, --h": "prints this object"
+    }, null, 4
+    return
 if options.json
     options.terse = true
     options.colors = false
 if options.terse
     options.shutup = true
+
+if options.verbose?
+    sisig.isVerbose = options.verbose
 
 ___.readable 'print', (data)->
     afterFirst = false
@@ -113,6 +143,7 @@ ready = ()->
     console.log sisig.print sisig.filterByDate options.when
     if sisig.cachefile.staleData or !sisig.cachefile.hasFile or options.force
         good = ()->
+            debug "exiting..."
             process.exit()
         bad = (e)->
             console.log "Error writing cachefile.", e

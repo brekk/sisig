@@ -7,11 +7,17 @@ Crawler = require 'crawler'
 
 prettyHTML = require('js-beautify').html
 
-promise = require 'promised-io/promise'
-pfs = require 'promised-io/fs'
-Deferred = promise.Deferred
+# promise = require 'promised-io/promise'
+Promise = require 'bluebird'
+# pfs = require 'promised-io/fs'
+pfs = Promise.promisifyAll fs
 
 Model = require 'ampersand-model'
+debug = require('debug') 'sisig'
+verbose = require('debug') 'sisig-verbose'
+j4 = ->
+    return _.map arguments, (arg)->
+        return JSON.stringify arg, null, 4
 
 Sisig = {}
 ___ = pp.scope Sisig
@@ -22,6 +28,7 @@ ___.mutable 'databaseLocation', 'cachefile.json'
 Cachefile = Model.extend {
     session:
         hasFile: ['boolean', true, false]
+        isVerbose: ['boolean', true, false]
 
     props: 
         lastCalled: 
@@ -38,6 +45,15 @@ Cachefile = Model.extend {
             default: ''
 
     derived:
+        verbose:
+            deps: [
+                'isVerbose'
+            ]
+            cache: false
+            fn: ->
+                if @isVerbose?
+                    return verbose
+                return ->
         calendar:
             deps: [
                 'dates'
@@ -51,11 +67,17 @@ Cachefile = Model.extend {
             ]
             cache: false
             fn: ()->
-                diff = Math.abs @lastCalled - Date.now()
-                return diff > Sisig.staleDataThreshold
+                now = Date.now()
+                debug "%s - %s", @lastCalled, now
+                diff = Math.abs @lastCalled - now
+                truth = diff > Sisig.staleDataThreshold
+                debug '%s = %s > %s', truth, diff, Sisig.staleDataThreshold
+                debug "diff: %s, stale? %s", diff, truth
+                return truth
 
 
-    filterByDate: (givenTime)->
+    filterByDate: (givenTime='all')->
+        debug 'filtering by date, given: %s', givenTime
         d = new Date()
         if givenTime?
             if givenTime instanceof Date
@@ -63,8 +85,10 @@ Cachefile = Model.extend {
             else if _.isString givenTime
                 if givenTime is 'all'
                     return @calendar.value()
-                if givenTime is 'tomorrow'
-                    d.setDate(d.getDate() + 1)
+                else if givenTime is 'today'
+                    d.setDate d.getDate()
+                else if givenTime is 'tomorrow'
+                    d.setDate d.getDate() + 1
                 else if givenTime.indexOf('-') isnt -1
                     hyphenated = givenTime.split '-'
                     if hyphenated.length is 3
@@ -75,6 +99,7 @@ Cachefile = Model.extend {
         matching = {
             date: Sisig.formatDate d
         }
+        debug 'looking to match: %s', matching.date.toString()
         return @calendar.where matching
                         .value()
 }
@@ -98,15 +123,16 @@ ___.readable 'parseDate', (str)->
 
 ___.mutable 'cachefile', new Cachefile()
 
-_([
+_.each [
     'on'
     'once'
     'trigger'
     'off'
     'filterByDate'
-]).each (method)->
+], (method)->
     ___.readable method, ()->
         Sisig.cachefile[method].apply Sisig.cachefile, arguments
+    debug 'creating `%s` method', method, Sisig[method]?
 
 ___.constant 'consume', (input)->
     if input?.lastScrape?
@@ -118,107 +144,117 @@ ___.constant 'consume', (input)->
         @trigger 'loaded', @
 
 ___.readable 'writeFile', (file, output, json=true)->
-    d = new Deferred()
-    good = ()->
-        d.resolve true
-    bad = (e)->
-        d.reject e
-    if json
-        output = JSON.stringify output, null, 4
-    pfs.writeFile(file, output).then good, bad
-    return d
-
-___.readable 'readFile', (filename, json=true)->
-    d = new Deferred()
-    file = pfs.readFile filename, {
-        charset: 'utf8'
-    }
-    good = (input)->
-        output = input.toString()
-        if !output? or output.length is 0
-            d.reject new Error "File is empty."
+    debug 'planning to write to file: %s %s', file, if json then "(json)" else ''
+    return new Promise (fulfill, reject)->
+        good = ()->
+            fulfill true
+            debug 'wrote to file.'
+            return
+        bad = (e)->
+            reject e
+            debug 'failed to write to file.'
             return
         if json
-            output = JSON.parse output
-        d.resolve output
-    bad = (e)->
-        d.reject e
-    file.then good, bad
-    return d
+            debug 'converting to json.'
+            output = JSON.stringify output, null, 4
+        pfs.writeFileAsync(file, output).then good
+                                        .catch bad
+
+___.readable 'readFile', (filename, json=true)->
+    debug 'planning to read from file: %s %s', filename, if json then "(json)" else ''
+    return new Promise (fulfill, reject)->
+        file = pfs.readFileAsync filename, {
+            charset: 'utf8'
+        }
+        good = (input)->
+            output = input.toString()
+            if !output? or output.length is 0
+                reject new Error "File is empty."
+                return
+            if json
+                output = JSON.parse output
+            fulfill output
+        file.then good
+            .catch reject
+        return d
 
 ___.readable 'parse', (e, res, $)->
     try
-        d = new Deferred()
-        self = Sisig
-        if e?
-            d.reject e
-            console.log "error during parsing", e
-            # self.trigger 'error:parse', e
-            return
-        if res?.body?
-            Sisig.cachefile.lastScrape = res.body
-        else
-            Sisig.cachefile.lastScrape = res
-        scrape = ()->
-            try
-                sections = $('#find-us').find "section:not([data-wcal-date=error])"
-                output = []
-                sections.each ()->
-                    section = $ @
-                    rawDateData = section.attr 'data-wcal-date'
-                    relativeDate = self.parseDate rawDateData
-                    rows = section.find '.map-row'
-                    rows.each ()->
-                        active = $ @
-                        title = active.find 'h5'
-                                      .eq 0
-                                      .text()
-                                      .trim()
-                        location = active.find '.map-trigger'
-                                         .text()
-                                         .split '. ,'
-                                         .join ','
-                        activeTime = active.find '.time'
-                                           .text()
-                                           .trim()
-                        activeTime = _(activeTime.split('\n')).map((word)->
-                            return word.trim()
-                        ).value().join(' ')
-                        data = {
-                            date: self.formatDate relativeDate
-                            title: title
-                            open: if location.length isnt 0 then true else false
-                        }
-                        if data.open
-                            data.location = location
-                            time = activeTime.split ' to '
-                            data.time = {
-                                start: time[0]
-                                end: time[1]
-                            }
-                            convertToFullTime = (time)->
-                                moment time, 'HH:mm[ ]a'
-                            time[0] = Number convertToFullTime time[0]
-                            time[1] = Number convertToFullTime time[1]
-                            data.pedanticTime = {
-                                start: self.formatDate time[0], true
-                                end: self.formatDate time[1], true
-                            }
-                        output.push data
-                        return
-                    return
-                self.consume {dates: output}
-                d.resolve output
+        debug 'parsing...'
+        return new Promise (fulfill, reject)->
+            self = Sisig
+            if e?
+                console.log "error during parsing", e
+                if e.stack?
+                    console.log e.stack
+                reject e
                 return
-            catch e
-                d?.reject? e
-        scrape()
-        return d
-    catch e
-        d?.reject? e
+            if res?.body?
+                debug "res.body available..."
+                Sisig.cachefile.lastScrape = res.body
+            else
+                debug "res available..."
+                Sisig.cachefile.lastScrape = res
+            scrape = ()->
+                try
+                    debug "scraping..."
+                    sections = $('#find-us').find "section:not([data-wcal-date=error])"
+                    output = []
+                    sections.each ()->
+                        section = $ @
+                        rawDateData = section.attr 'data-wcal-date'
+                        relativeDate = self.parseDate rawDateData
+                        rows = section.find '.map-row'
+                        rows.each ()->
+                            active = $ @
+                            title = active.find 'h5'
+                                          .eq 0
+                                          .text()
+                                          .trim()
+                            location = active.find '.map-trigger'
+                                             .text()
+                                             .split '. ,'
+                                             .join ','
+                            activeTime = active.find '.time'
+                                               .text()
+                                               .trim()
+                            activeTime = _(activeTime.split('\n')).map((word)->
+                                return word.trim()
+                            ).value().join(' ')
+                            data = {
+                                date: self.formatDate relativeDate
+                                title: title
+                                open: if location.length isnt 0 then true else false
+                            }
+                            if data.open
+                                data.location = location
+                                time = activeTime.split ' to '
+                                data.time = {
+                                    start: time[0]
+                                    end: time[1]
+                                }
+                                convertToFullTime = (time)->
+                                    moment time, 'HH:mm[ ]a'
+                                time[0] = Number convertToFullTime time[0]
+                                time[1] = Number convertToFullTime time[1]
+                                data.pedanticTime = {
+                                    start: self.formatDate time[0], true
+                                    end: self.formatDate time[1], true
+                                }
+                            output.push data
+                            self.cachefile.verbose j4 data
+                            return
+                        return
+                    self.consume {dates: output}
+                    fulfill output
+                    return
+                catch e
+                    reject e
+            scrape()
+            return
 
 ___.readable 'crawler', _.once ()->
-    return new Crawler {
+    crawler = new Crawler {
         maxConnections: 1
         jQuery:
             name: 'cheerio'
@@ -226,57 +262,66 @@ ___.readable 'crawler', _.once ()->
                 normalizeWhitespace: true
         callback: Sisig.parse
     }
+    debug "generating crawler instance... %s", j4 crawler
+    return crawler
 
 ___.readable 'loadFromWeb', ()->
-    self = @
-    d = new Deferred()
-    @once 'error:parse', (e)->
-        d.reject e
-    @once 'loaded', ()->
-        d.resolve self
-    @crawler().queue 'http://senorsisig.com'
-    return d
+    debug "loading content from web..."
+    self = Sisig
+    return new Promise (fulfill, reject)->
+        self.once 'error:parse', (e)->
+            reject e
+        self.once 'loaded', ()->
+            fulfill self
+        self.crawler().queue 'http://senorsisig.com'
+        return
 
 ___.readable 'loadFromFile', (filename)->
-    d = new Deferred()
-    self = @
-    bad = (error)->
-        d.reject error
-    good = (input)->
-        self.consume input
-        d.resolve Sisig
-    @readFile(filename).then good, bad
-    return d
+    debug "loading content from cache..."
+    self = Sisig
+    return new Promise (fulfill, reject)->
+        bad = (error)->
+            reject error
+        good = (input)->
+            self.consume input
+            fulfill Sisig
+        return pfs.readFileAsync(filename).then good
+                                          .catch bad
 
 ___.readable 'load', ()->
-    self = @
-    d = new Deferred()
+    self = Sisig
+    return new Promise (fulfill, reject)->
 
-    self.once 'error:parse', (e)->
-        d.reject e
+        self.once 'error:parse', (e)->
+            reject e
 
-    self.once 'loaded', ()->
-        d.resolve self
+        self.once 'loaded', ()->
+            fulfill self
 
-    scrape = self.loadFromWeb
+        rescrape = self.loadFromWeb
 
-    good = ()->
-        # we have a file, so we can infer staleness
-        self.cachefile.hasFile = true
-        if self.cachefile.staleData
-            scrape()
-        else
-            d.resolve self
+        good = ()->
+            # we have a file, so we can infer staleness
+            self.cachefile.hasFile = true
+            if self.cachefile.staleData
+                fulfill rescrape()
+            else
+                console.log self, "<<<< self"
+                fulfill self
+        alreadyBad = false
+        bad = (e)->
+            console.log "error during load", e
+            if e?
+                reject e
 
-    bad = (e)->
-        # we don't have a file, so we'll have to scrape
-        scrape()
 
-    @loadFromFile(@databaseLocation).then good, bad
-    return d
+
+        return self.loadFromFile(self.databaseLocation).then good, bad
+                                                       .catch bad
 
 ___.readable 'writeCache', ()->
-    @cachefile.lastCalled = Date.now()
-    return @writeFile @databaseLocation, @cachefile.toJSON()
+    self = Sisig
+    self.cachefile.lastCalled = Date.now()
+    return self.writeFile self.databaseLocation, self.cachefile.toJSON()
 
 module.exports = Sisig
