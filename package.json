@@ -3,13 +3,7 @@
   "version": "0.0.2",
   "description": "Where is Senor Sisig?",
   "main": "index.js",
-  "scripts": {
-    "test": "mocha --reporter spec",
-    "build": "./node_modules/.bin/coffee --compile --output lib/ src/",
-    "preinstall": "npm run build",
-    "clean-dev": "(rm src/*js || true) && (rm src/test/*.js || true)",
-    "clean": "npm run clean-dev && (rm -Rf lib || true)"
-  },
+  "scripts": {},
   "keywords": [
     "senor",
     "sisig",
@@ -21,18 +15,16 @@
   "author": "Brekk Bockrath",
   "license": "MIT",
   "dependencies": {
-    "ampersand-model": "^4.0.3",
-    "chalk": "^0.5.1",
-    "cheerio": "^0.18.0",
-    "coffee-script": "~1.8.0",
-    "crawler": "^0.4.1",
-    "has-ansi": "^1.0.0",
-    "js-beautify": "^1.5.4",
-    "lodash": "^2.4.1",
-    "minimist": "^1.1.0",
-    "moment": "^2.8.4",
-    "parkplace": "0.0.8",
-    "promised-io": "^0.3.4",
-    "strip-ansi": "^2.0.0"
+    "entrust": "^0.0.12",
+    "f-utility": "^3.5.1",
+    "fluture": "^7.2.2",
+    "optimist": "^0.6.1",
+    "x-ray": "^2.3.2",
+    "x-ray-driver-redis": "^0.1.0"
+  },
+  "devDependencies": {
+    "germs": "^0.1.9",
+    "jest": "^21.2.1",
+    "xtrace": "^0.1.6"
   }
 }
